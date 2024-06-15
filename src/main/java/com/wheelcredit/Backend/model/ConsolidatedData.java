@@ -26,6 +26,9 @@ public class ConsolidatedData {
     @Column(name = "total_interest", precision = 10, scale = 4)
     private BigDecimal totalInterest;
 
+    @Column(name = "credit_used", precision = 10, scale = 4)
+    private BigDecimal creditUsed;
+
     @JsonIgnore
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")

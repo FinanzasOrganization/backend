@@ -57,6 +57,7 @@ public class TransactionServiceImpl implements TransactionService {
             totalAmount = installmentAmount.multiply(BigDecimal.valueOf(trd.getInstallments()));
             totalInterest = interestAmount.multiply(BigDecimal.valueOf(trd.getInstallments()));
         }
+        validateCreditLimit(customerId, trd.getAmount());
         transactionRepository.saveAll(transactions);
 
         ConsolidatedData consolidatedData = consolidatedDataRepository.findByCustomerId(customer.getId());
@@ -66,9 +67,11 @@ public class TransactionServiceImpl implements TransactionService {
             consolidatedData.setCustomer(customer);
             consolidatedData.setTotalAmount(totalAmount);
             consolidatedData.setTotalInterest(totalInterest);
+            consolidatedData.setCreditUsed(trd.getAmount());
         } else {
             consolidatedData.setTotalAmount(consolidatedData.getTotalAmount().add(totalAmount));
             consolidatedData.setTotalInterest(consolidatedData.getTotalInterest().add(totalInterest));
+            consolidatedData.setCreditUsed(consolidatedData.getCreditUsed().add(trd.getAmount()));
         }
         consolidatedDataRepository.save(consolidatedData);
 
@@ -199,6 +202,21 @@ public class TransactionServiceImpl implements TransactionService {
                 BigDecimal.ONE.add(monthlyRate).pow(-installments, MathContext.DECIMAL128)
         );
         return numerator.divide(denominator, MathContext.DECIMAL128);
+    }
+
+    public void validateCreditLimit(Long customerId, BigDecimal amount) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new RuntimeException("Customer not found"));
+        ConsolidatedData consolidatedData = consolidatedDataRepository.findByCustomerId(customerId);
+        if (consolidatedData == null) {
+            if (amount.compareTo(customer.getCreditLimit()) > 0) {
+                throw new RuntimeException("Credit limit exceeded");
+            }
+        } else {
+            if (amount.add(consolidatedData.getCreditUsed()).compareTo(customer.getCreditLimit()) > 0) {
+                throw new RuntimeException("Credit limit exceeded");
+            }
+        }
     }
 
 
