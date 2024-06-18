@@ -1,11 +1,16 @@
 package com.wheelcredit.Backend.controller;
 
+import com.wheelcredit.Backend.dto.ClientDto;
 import com.wheelcredit.Backend.model.Customer;
 import com.wheelcredit.Backend.service.CustomerService;
+import org.modelmapper.ModelMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @CrossOrigin(origins = "*")
 @RestController
@@ -49,5 +54,13 @@ public class CustomerController {
     public ResponseEntity<Customer> deleteCustomer(@PathVariable(name = "customerId") Long customerId) {
         customerService.delete(customerId);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @GetMapping
+    public List<ClientDto> listar() {
+        return customerService.findAll().stream().map(y -> {
+            ModelMapper m = new ModelMapper();
+            return m.map(y, ClientDto.class);
+        }).collect(Collectors.toList());
     }
 }
