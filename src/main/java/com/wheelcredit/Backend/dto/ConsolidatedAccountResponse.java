@@ -17,5 +17,6 @@ public class ConsolidatedAccountResponse {
     private Long customerId;
     private BigDecimal totalBalance;
     private BigDecimal totalInterest;
+    private BigDecimal creditUsed;
     private List<Transaction> transactions;
 }

@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/go-finance/v1/customer")
@@ -49,5 +51,11 @@ public class CustomerController {
     public ResponseEntity<Customer> deleteCustomer(@PathVariable(name = "customerId") Long customerId) {
         customerService.delete(customerId);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Customer>> getAllCustomers() {
+        List<Customer> customers = customerService.findAll();
+        return new ResponseEntity<>(customers, HttpStatus.OK);
     }
 }

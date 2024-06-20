@@ -11,4 +11,5 @@ public interface TransactionService {
     Transaction findById(Long transactionId);
     List<Transaction> findAll();
     ConsolidatedAccountResponse consolidateAccount(Long customerId);
+    Transaction updateStatus(Long transactionId, Transaction.TransactionStatus newStatus);
 }
