@@ -60,6 +60,13 @@ public class Transaction {
     @Column(name = "installments")
     private Integer installments;
 
+    public String getCustomerName() {
+        return customer.getName();
+    }
+
+    public BigDecimal getCreditLimit() {
+        return customer.getCreditLimit();
+    }
 
     public enum TransactionType {
         PURCHASE,

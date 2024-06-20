@@ -175,7 +175,15 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     public List<Transaction> findAll() {
-        return List.of();
+        return transactionRepository.findAll();
+    }
+
+    @Override
+    public Transaction updateStatus(Long transactionId, Transaction.TransactionStatus newStatus) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+        transaction.setStatus(newStatus);
+        return transactionRepository.save(transaction);
     }
 
     @Override
@@ -188,6 +196,7 @@ public class TransactionServiceImpl implements TransactionService {
         response.setTransactions(transactions);
         response.setTotalBalance(consolidatedData.getTotalAmount());
         response.setTotalInterest(consolidatedData.getTotalInterest());
+        response.setCreditUsed(consolidatedData.getCreditUsed());
         return response;
     }
 

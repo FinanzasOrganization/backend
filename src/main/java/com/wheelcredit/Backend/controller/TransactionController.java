@@ -2,8 +2,10 @@ package com.wheelcredit.Backend.controller;
 
 import com.wheelcredit.Backend.dto.ConsolidatedAccountResponse;
 import com.wheelcredit.Backend.dto.TransactionRequestDto;
+import com.wheelcredit.Backend.model.Customer;
 import com.wheelcredit.Backend.model.Transaction;
 import com.wheelcredit.Backend.service.TransactionService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -31,5 +33,19 @@ public class TransactionController {
     public ResponseEntity<ConsolidatedAccountResponse> consolidateTransaction(@PathVariable(name = "customerId") Long customerId) {
         ConsolidatedAccountResponse response = transactionService.consolidateAccount(customerId);
         return ResponseEntity.ok(response);
+    }
+
+    @Transactional
+    @GetMapping
+    public ResponseEntity<List<Transaction>> getAllTransactions() {
+        List<Transaction> transactions = transactionService.findAll();
+        return ResponseEntity.ok(transactions);
+    }
+
+    @Transactional
+    @PutMapping("/{transactionId}")
+    public ResponseEntity<Transaction> updateTransactionStatus(@PathVariable(name = "transactionId") Long transactionId, @RequestBody Transaction.TransactionStatus newStatus) {
+        Transaction transaction = transactionService.updateStatus(transactionId, newStatus);
+        return ResponseEntity.ok(transaction);
     }
 }
