@@ -16,9 +16,11 @@ public class TransactionRequestDto {
     private BigDecimal amount;
     private String description;
     private Transaction.CreditType creditType;
+    private Transaction.TransactionType transactionType;
     private BigDecimal interestRate;
     private Integer installments;
     private InterestType interestType;
+    private Integer tasaCapitalizada;
 
     public enum InterestType {
         NOMINAL,
