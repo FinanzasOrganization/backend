@@ -1,6 +1,7 @@
 package com.wheelcredit.Backend.controller;
 
 import com.wheelcredit.Backend.dto.ClientDto;
+import com.wheelcredit.Backend.dto.CustomerDto;
 import com.wheelcredit.Backend.model.Customer;
 import com.wheelcredit.Backend.service.CustomerService;
 import org.modelmapper.ModelMapper;
@@ -57,10 +58,8 @@ public class CustomerController {
     }
 
     @GetMapping
-    public List<ClientDto> listar() {
-        return customerService.findAll().stream().map(y -> {
-            ModelMapper m = new ModelMapper();
-            return m.map(y, ClientDto.class);
-        }).collect(Collectors.toList());
+    public ResponseEntity<List<Customer>> getAllCustomers() {
+        List<Customer> customers = customerService.findAll();
+        return new ResponseEntity<>(customers, HttpStatus.OK);
     }
 }
