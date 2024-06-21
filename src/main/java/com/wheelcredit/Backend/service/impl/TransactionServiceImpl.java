@@ -155,8 +155,11 @@ public class TransactionServiceImpl implements TransactionService {
         consolidatedData.setTotalPaymentPending(consolidatedData.getTotalAmount().subtract(paymentAmount));
         consolidatedData.setCreditUsed(consolidatedData.getCreditUsed().subtract(paymentAmount));
         consolidatedData.setTotalPaymentAmount(consolidatedData.getTotalPaymentAmount().add(paymentAmount));
-        consolidatedData.setTotalPenaltyPayment(consolidatedData.getTotalPenaltyPayment().add(purchaseTransaction.getPenaltyInterestAmount()));
-        consolidatedData.setTotalPenaltyPending(consolidatedData.getTotalPenaltyPending().subtract(purchaseTransaction.getPenaltyInterestAmount()));
+        if (paymentTransaction.getStatus() == Transaction.TransactionStatus.DELAYED)
+        {
+            consolidatedData.setTotalPenaltyPayment(consolidatedData.getTotalPenaltyPayment().add(purchaseTransaction.getPenaltyInterestAmount()));
+            consolidatedData.setTotalPenaltyPending(consolidatedData.getTotalPenaltyPending().subtract(purchaseTransaction.getPenaltyInterestAmount()));
+        }
         consolidatedDataRepository.save(consolidatedData);
 
         return paymentTransaction;
