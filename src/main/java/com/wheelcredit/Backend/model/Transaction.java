@@ -29,10 +29,10 @@ public class Transaction {
     @Column(name = "due_date")
     private LocalDate dueDate;
 
-    @Column(name = "amount")
+    @Column(name = "amount", precision = 17, scale = 7)
     private BigDecimal amount;
 
-    @Column(name = "interest_amount")
+    @Column(name = "interest_amount", precision = 17, scale = 7)
     private BigDecimal interestAmount;
 
     @Enumerated(EnumType.STRING)

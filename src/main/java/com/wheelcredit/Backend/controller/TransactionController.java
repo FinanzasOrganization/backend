@@ -36,6 +36,13 @@ public class TransactionController {
     }
 
     @Transactional
+    @GetMapping("/{transactionId}")
+    public ResponseEntity<Transaction> getTransactionById(@PathVariable(name = "transactionId") Long transactionId) {
+        Transaction transaction = transactionService.getTransactionById(transactionId);
+        return ResponseEntity.ok(transaction);
+    }
+
+    @Transactional
     @GetMapping
     public ResponseEntity<List<Transaction>> getAllTransactions() {
         List<Transaction> transactions = transactionService.findAll();

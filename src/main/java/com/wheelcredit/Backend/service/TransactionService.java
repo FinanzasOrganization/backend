@@ -8,7 +8,7 @@ import java.util.List;
 
 public interface TransactionService {
     List<Transaction> save(TransactionRequestDto transaction, Long accountId);
-    Transaction findById(Long transactionId);
+    Transaction getTransactionById(Long transactionId);
     List<Transaction> findAll();
     ConsolidatedAccountResponse consolidateAccount(Long customerId);
     Transaction updateStatus(Long transactionId, Transaction.TransactionStatus newStatus);

@@ -19,6 +19,9 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+import static java.lang.Math.exp;
+import static java.lang.Math.log;
+
 @Service
 public class TransactionServiceImpl implements TransactionService {
     @Autowired
@@ -44,19 +47,26 @@ public class TransactionServiceImpl implements TransactionService {
         BigDecimal interestAmount = BigDecimal.ZERO;
         BigDecimal totalAmount = BigDecimal.ZERO;
         BigDecimal totalInterest = BigDecimal.ZERO;
-        if (trd.getCreditType() == Transaction.CreditType.SINGLE_PAYMENT) {
-            transactions.add(createSinglePaymentTransaction(customer, trd.getAmount(), trd.getTasaCapitalizada(), trd.getDescription(), trd.getInterestRate(), trd.getInterestType(), transactionDate, paymentDate));
-            installmentAmount = calculateSinglePayment(trd.getAmount(), trd.getTasaCapitalizada() , trd.getInterestRate(), trd.getInterestType());
-            interestAmount = calculateSingleInterestAmount(trd.getAmount(), trd.getTasaCapitalizada() , trd.getInterestRate(), trd.getInterestType());
-            totalAmount = installmentAmount;
-            totalInterest = interestAmount;
-        } else if (trd.getCreditType() == Transaction.CreditType.MULTI_PAYMENT) {
-            transactions.addAll(createMultiPaymentTransactions(customer, trd.getAmount(), trd.getDescription(), trd.getInterestRate(), transactionDate, trd.getInstallments(), trd.getInterestType()));
-            installmentAmount = calculateMultiPayment(trd.getAmount(), trd.getInterestRate(), trd.getInstallments());
-            interestAmount = installmentAmount.subtract(trd.getAmount().divide(BigDecimal.valueOf(trd.getInstallments()), MathContext.DECIMAL128));
-            totalAmount = installmentAmount.multiply(BigDecimal.valueOf(trd.getInstallments()));
-            totalInterest = interestAmount.multiply(BigDecimal.valueOf(trd.getInstallments()));
+        if(trd.getTransactionType() == Transaction.TransactionType.PURCHASE) {
+            if (trd.getCreditType() == Transaction.CreditType.SINGLE_PAYMENT) {
+                transactions.add(createSinglePaymentTransaction(customer, trd.getAmount(), trd.getDescription(), trd.getInterestRate(), trd.getInterestType(), trd.getTasaType(), trd.getCapitalizacionType(), transactionDate, paymentDate, customer.getMonthlyPaymentDate()));
+                installmentAmount = calculateSinglePayment(trd.getAmount(), trd.getInterestRate(), trd.getInterestType(), trd.getTasaType(), trd.getCapitalizacionType(), customer.getMonthlyPaymentDate());
+                interestAmount = calculateSingleInterestAmount(trd.getAmount(), trd.getInterestRate(), trd.getInterestType(), trd.getTasaType(), trd.getCapitalizacionType(), customer.getMonthlyPaymentDate());
+                totalAmount = installmentAmount;
+                totalInterest = interestAmount;
+            } else if (trd.getCreditType() == Transaction.CreditType.MULTI_PAYMENT) {
+                transactions.addAll(createMultiPaymentTransactions(customer, trd.getAmount(), trd.getDescription(), trd.getInterestRate(), transactionDate, trd.getInstallments(), trd.getInterestType(), trd.getTasaType()));
+                installmentAmount = calculateMultiPayment(trd.getAmount(), trd.getInterestRate(), trd.getInstallments(), trd.getTasaType());
+                interestAmount = installmentAmount.subtract(trd.getAmount().divide(BigDecimal.valueOf(trd.getInstallments()), MathContext.DECIMAL128));
+                totalAmount = installmentAmount.multiply(BigDecimal.valueOf(trd.getInstallments()));
+                totalInterest = interestAmount.multiply(BigDecimal.valueOf(trd.getInstallments()));
+            }
         }
+        else {
+            Transaction tr = getTransactionById(trd.getPurchaseTransactionId());
+            transactions.add(createPaymentTransaction(customerId, trd.getPurchaseTransactionId(), trd.getAmount()));
+        }
+
         validateCreditLimit(customerId, trd.getAmount());
         transactionRepository.saveAll(transactions);
 
@@ -78,9 +88,9 @@ public class TransactionServiceImpl implements TransactionService {
         return transactions;
     }
 
-    private Transaction createSinglePaymentTransaction(Customer customer, BigDecimal amount, Integer tasaCapitalizada , String description, BigDecimal interestRate, TransactionRequestDto.InterestType interestType, LocalDate transactionDate, LocalDate paymentDate) {
-        BigDecimal totalAmount = calculateSinglePayment(amount, tasaCapitalizada, interestRate, interestType);
-        BigDecimal interestAmount = calculateSingleInterestAmount(amount, tasaCapitalizada, interestRate, interestType);
+    private Transaction createSinglePaymentTransaction(Customer customer, BigDecimal amount, String description, BigDecimal interestRate, TransactionRequestDto.InterestType interestType, TransactionRequestDto.TasaType tasaType, TransactionRequestDto.CapitalizacionType capitalizacionType, LocalDate transactionDate, LocalDate paymentDate, LocalDate monthlyPaymentDate) {
+        BigDecimal totalAmount = calculateSinglePayment(amount, interestRate, interestType, tasaType, capitalizacionType, monthlyPaymentDate);
+        BigDecimal interestAmount = calculateSingleInterestAmount(amount, interestRate, interestType, tasaType, capitalizacionType, monthlyPaymentDate);
         return Transaction.builder()
                 .customer(customer)
                 .amount(totalAmount)
@@ -124,6 +134,9 @@ public class TransactionServiceImpl implements TransactionService {
 
         purchaseTransaction.setAmount(remainingAmount);
         purchaseTransaction.setInterestAmount(remainingInterest);
+        if (remainingAmount.compareTo(BigDecimal.ZERO) == 0) {
+            purchaseTransaction.setStatus(Transaction.TransactionStatus.PAID);
+        }
         transactionRepository.save(purchaseTransaction);
         transactionRepository.save(paymentTransaction);
 
@@ -136,15 +149,15 @@ public class TransactionServiceImpl implements TransactionService {
         return paymentTransaction;
     }
 
-    private List<Transaction> createMultiPaymentTransactions(Customer customer, BigDecimal amount, String description, BigDecimal interestRate, LocalDate transactionDate, int installments, TransactionRequestDto.InterestType interestType) {
+    private List<Transaction> createMultiPaymentTransactions(Customer customer, BigDecimal amount, String description, BigDecimal interestRate, LocalDate transactionDate, int installments, TransactionRequestDto.InterestType interestType, TransactionRequestDto.TasaType tasaType) {
         List<Transaction> transactions = new ArrayList<>();
         //BigDecimal installmentAmount = amount.divide(BigDecimal.valueOf(installments), BigDecimal.ROUND_HALF_UP);
-        BigDecimal installmentAmount = calculateMultiPayment(amount, interestRate, installments);
+        BigDecimal installmentAmount = calculateMultiPayment(amount, interestRate, installments, tasaType);
         BigDecimal interestAmount = installmentAmount.subtract(amount.divide(BigDecimal.valueOf(installments), MathContext.DECIMAL128));
 
 
         for (int i = 0; i < installments; i++) {
-            LocalDate paymentDate = customerService.getMaxPaymentDateForMonth(transactionDate.plusMonths(i), customer.getId());
+            LocalDate paymentDate = customerService.getMaxPaymentDateForMonth(transactionDate.plusMonths(i + 1), customer.getId());
             transactions.add(Transaction.builder()
                     .customer(customer)
                     .amount(installmentAmount)
@@ -169,8 +182,8 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
-    public Transaction findById(Long transactionId) {
-        return null;
+    public Transaction getTransactionById(Long transactionId) {
+        return transactionRepository.findById(transactionId).orElse(null);
     }
 
     @Override
@@ -200,51 +213,81 @@ public class TransactionServiceImpl implements TransactionService {
         return response;
     }
 
-    public BigDecimal calculateSinglePayment(BigDecimal amount, Integer tasaCapitalizada , BigDecimal interestRate, TransactionRequestDto.InterestType interestType) {
+    public BigDecimal calculateSinglePayment(BigDecimal amount, BigDecimal interestRate, TransactionRequestDto.InterestType interestType, TransactionRequestDto.TasaType tasaType, TransactionRequestDto.CapitalizacionType capitalizacionType, LocalDate monthlyPaymentDate) {
         BigDecimal decimalInterest = interestRate.divide(BigDecimal.valueOf(100), MathContext.DECIMAL128);
-        if (interestType == interestType.EFECTIVA) {
-            BigDecimal exponent = BigDecimal.valueOf(30).divide(BigDecimal.valueOf(tasaCapitalizada), MathContext.DECIMAL128);
-            BigDecimal factor = BigDecimal.ONE.add(decimalInterest).pow(exponent.intValue(), MathContext.DECIMAL128);  // Elevar a la potencia (n° días trasladar / n° tep)
-            return amount.multiply(factor);
+        LocalDate transactionDate = LocalDate.now();
+        int totalDays = (int) transactionDate.until(monthlyPaymentDate).getDays();
+
+        BigDecimal m = getMValue(tasaType, capitalizacionType);
+        BigDecimal n = BigDecimal.valueOf(totalDays);
+
+        if (interestType == TransactionRequestDto.InterestType.NOMINAL) {
+            // S = C * (1 + TN/m)^n
+            BigDecimal base = BigDecimal.ONE.add(decimalInterest.divide(m, MathContext.DECIMAL128));
+            BigDecimal result = amount.multiply(base.pow(n.intValue(), MathContext.DECIMAL128), MathContext.DECIMAL128);
+            return result;
         } else {
-            BigDecimal one = BigDecimal.ONE;
-            BigDecimal interestFactor = decimalInterest.multiply(new BigDecimal(30));
-            BigDecimal factor = one.add(interestFactor);
-            // C * (1 + i * t)
-            return amount.multiply(factor);
+            // S = C * (1 + TEA)^(n/m)
+            BigDecimal exponent = n.divide(m, MathContext.DECIMAL128);
+            BigDecimal base = BigDecimal.ONE.add(decimalInterest);
+            BigDecimal result = amount.multiply(pow(base, exponent), MathContext.DECIMAL128);
+            return result;
         }
     }
 
-    public BigDecimal calculateSingleInterestAmount(BigDecimal amount, Integer tasaCapitalizada, BigDecimal interestRate, TransactionRequestDto.InterestType interestType) {
+    public BigDecimal calculateSingleInterestAmount(BigDecimal amount, BigDecimal interestRate, TransactionRequestDto.InterestType interestType, TransactionRequestDto.TasaType tasaType, TransactionRequestDto.CapitalizacionType capitalizacionType, LocalDate monthlyPaymentDate) {
         BigDecimal decimalInterest = interestRate.divide(BigDecimal.valueOf(100), MathContext.DECIMAL128);
         if (interestType == TransactionRequestDto.InterestType.EFECTIVA) {
-            BigDecimal exponent = BigDecimal.valueOf(30).divide(BigDecimal.valueOf(tasaCapitalizada), MathContext.DECIMAL128);
-            BigDecimal factor = BigDecimal.ONE.add(decimalInterest).pow(exponent.intValue(), MathContext.DECIMAL128);  // Elevar a la potencia (n° días trasladar / n° tep)
-            return amount.multiply(factor).subtract(amount);
+            LocalDate transactionDate = LocalDate.now();
+            int totalDays = (int) transactionDate.until(monthlyPaymentDate).getDays();
+            BigDecimal m = getMValue(tasaType, capitalizacionType);
+            BigDecimal n = BigDecimal.valueOf(totalDays);
+
+            // I = C * (1 + TEA)^(n/m) - C
+            BigDecimal exponent = n.divide(m, MathContext.DECIMAL128);
+            BigDecimal base = BigDecimal.ONE.add(decimalInterest);
+            BigDecimal result = amount.multiply(pow(base, exponent), MathContext.DECIMAL128).subtract(amount);
+            return result;
         } else {
-            BigDecimal one = BigDecimal.ONE;
-            BigDecimal interestFactor = decimalInterest.multiply(new BigDecimal(30));
-            BigDecimal factor = one.add(interestFactor);
-            // C * (1 + i * t) - C
-            return amount.multiply(factor).subtract(amount);
+            // I = C * (1 + TN/m)^n - C
+            LocalDate transactionDate = LocalDate.now();
+            int totalDays = (int) transactionDate.until(monthlyPaymentDate).getDays();
+            BigDecimal m = getMValue(tasaType, capitalizacionType);
+            BigDecimal n = BigDecimal.valueOf(totalDays);
+
+            BigDecimal base = BigDecimal.ONE.add(decimalInterest.divide(m, MathContext.DECIMAL128));
+            BigDecimal result = amount.multiply(base.pow(n.intValue(), MathContext.DECIMAL128), MathContext.DECIMAL128).subtract(amount);
+            return result;
         }
     }
 
-    public BigDecimal calculateMultiPayment(BigDecimal amount, BigDecimal interestRate, int installments) {
-        // TEP es la tasa de interés efectiva por período
+    public BigDecimal calculateMultiPayment(BigDecimal amount, BigDecimal interestRate, int installments, TransactionRequestDto.TasaType tasaType) {
         BigDecimal one = BigDecimal.ONE;
         BigDecimal decimalInterest = interestRate.divide(BigDecimal.valueOf(100), MathContext.DECIMAL128);
-        BigDecimal tep = decimalInterest;
-        // Calcular (1 + TEP)^-n
-        BigDecimal onePlusTep = one.add(tep);
-        BigDecimal negativePower = onePlusTep.pow(-installments, MathContext.DECIMAL128);
-        // Calcular denominador: 1 - (1 + TEP)^-n
-        BigDecimal denominator = one.subtract(negativePower, MathContext.DECIMAL128);
-        // Calcular numerador: C * TEP
-        BigDecimal numerator = amount.multiply(tep, MathContext.DECIMAL128);
-        // Calcular R: (C * TEP) / (1 - (1 + TEP)^-n)
-        BigDecimal payment = numerator.divide(denominator, MathContext.DECIMAL128);
-        return payment;
+        BigDecimal TEM;
+
+        // Convertir la tasa a mensual si es necesario
+        if (tasaType != TransactionRequestDto.TasaType.MENSUAL) {
+            int diasTEM = 30;
+            int diasTEA = getDiasTEA(tasaType);
+            BigDecimal exp = BigDecimal.valueOf(diasTEM).divide(BigDecimal.valueOf(diasTEA), MathContext.DECIMAL128);
+            BigDecimal base = one.add(decimalInterest);
+            TEM = pow(base, exp).subtract(one, MathContext.DECIMAL128);
+        } else {
+            TEM = decimalInterest.divide(BigDecimal.valueOf(100), MathContext.DECIMAL128);
+        }
+
+        BigDecimal n = BigDecimal.valueOf(installments);
+        // (1 + TEM)
+        BigDecimal firstBase = BigDecimal.ONE.add(TEM);
+        //(1 + TEM)^n
+        BigDecimal firstValue = pow(firstBase, n);
+        ///(1 + TEM)^n - 1
+        BigDecimal inferiorValue = firstValue.subtract(one, MathContext.DECIMAL128);
+        //TEM * (1 + TEM)^n
+        BigDecimal superiorValue = TEM.multiply(firstValue, MathContext.DECIMAL128);
+        BigDecimal completeValue = superiorValue.divide(inferiorValue, MathContext.DECIMAL128);
+        return amount.multiply(completeValue, MathContext.DECIMAL128);
     }
 
     public BigDecimal calculateMultiPaymentWithGracePeriod(BigDecimal amount, BigDecimal annualInterestRate, int installments, TransactionRequestDto.InterestType interestType, int gracePeriod) {
@@ -279,6 +322,73 @@ public class TransactionServiceImpl implements TransactionService {
         }
     }
 
+    private BigDecimal getMValue(TransactionRequestDto.TasaType tasaType, TransactionRequestDto.CapitalizacionType capitalizacionType) {
+        int tasaDays = 0;
+        int capitalizacionDays = 0;
+
+        switch (tasaType) {
+            case MENSUAL:
+                tasaDays = 30;
+                break;
+            case BIMESTRAL:
+                tasaDays = 60;
+                break;
+            case TRIMESTRAL:
+                tasaDays = 90;
+                break;
+            case SEMESTRAL:
+                tasaDays = 180;
+                break;
+            case ANUAL:
+                tasaDays = 360;
+                break;
+        }
+
+        switch (capitalizacionType) {
+            case DIARIA:
+                capitalizacionDays = 1;
+                break;
+            case QUINCENAL:
+                capitalizacionDays = 15;
+                break;
+            case MENSUAL:
+                capitalizacionDays = 30;
+                break;
+        }
+
+        return BigDecimal.valueOf(tasaDays).divide(BigDecimal.valueOf(capitalizacionDays), MathContext.DECIMAL128);
+    }
+
+    private int getDiasTEA(TransactionRequestDto.TasaType tasaType) {
+        switch (tasaType) {
+            case ANUAL:
+                return 360;
+            case SEMESTRAL:
+                return 180;
+            case TRIMESTRAL:
+                return 90;
+            case BIMESTRAL:
+                return 60;
+            default:
+                throw new IllegalArgumentException("Tipo de tasa no soportado: " + tasaType);
+        }
+    }
+
+    private BigDecimal pow(BigDecimal base, BigDecimal exponent) {
+        int signOf2 = exponent.signum();
+        double dn1 = base.doubleValue();
+        exponent = exponent.multiply(new BigDecimal(signOf2)); // exponent is now positive
+        BigDecimal remainderOf2 = exponent.remainder(BigDecimal.ONE);
+        BigDecimal n2IntPart = exponent.subtract(remainderOf2);
+        BigDecimal intPow = base.pow(n2IntPart.intValueExact(), MathContext.DECIMAL128);
+        BigDecimal doublePow = BigDecimal.valueOf(Math.pow(dn1, remainderOf2.doubleValue()));
+
+        BigDecimal result = intPow.multiply(doublePow, MathContext.DECIMAL128);
+        if (signOf2 == -1) {
+            result = BigDecimal.ONE.divide(result, MathContext.DECIMAL128);
+        }
+        return result;
+    }
 
 
 }

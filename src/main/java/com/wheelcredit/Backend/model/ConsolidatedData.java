@@ -20,13 +20,13 @@ public class ConsolidatedData {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "total_amount", precision = 10, scale = 4)
+    @Column(name = "total_amount", precision = 17, scale = 7)
     private BigDecimal totalAmount;
 
-    @Column(name = "total_interest", precision = 10, scale = 4)
+    @Column(name = "total_interest", precision = 17, scale = 7)
     private BigDecimal totalInterest;
 
-    @Column(name = "credit_used", precision = 10, scale = 4)
+    @Column(name = "credit_used", precision = 17, scale = 7)
     private BigDecimal creditUsed;
 
     @JsonIgnore

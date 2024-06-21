@@ -20,10 +20,26 @@ public class TransactionRequestDto {
     private BigDecimal interestRate;
     private Integer installments;
     private InterestType interestType;
-    private Integer tasaCapitalizada;
+    private Long purchaseTransactionId;
+    private TasaType tasaType;
+    private CapitalizacionType capitalizacionType;
 
     public enum InterestType {
         NOMINAL,
         EFECTIVA
+    }
+
+    public enum TasaType {
+        MENSUAL,
+        BIMESTRAL,
+        TRIMESTRAL,
+        SEMESTRAL,
+        ANUAL
+    }
+
+    public enum CapitalizacionType {
+        DIARIA,
+        QUINCENAL,
+        MENSUAL
     }
 }
