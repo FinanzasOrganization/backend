@@ -41,6 +41,11 @@ public class TransactionServiceImpl implements TransactionService {
                 .orElseThrow(() -> new RuntimeException("Customer not found"));
         LocalDate transactionDate = LocalDate.now();
         LocalDate paymentDate = customerService.getMaxPaymentDateForCurrentMonth(customerId);
+        Transaction tr = new Transaction();
+        if(trd.getTransactionType() == Transaction.TransactionType.PAYMENT){
+            tr = transactionRepository.findById(trd.getPurchaseTransactionId())
+                    .orElseThrow(() -> new RuntimeException("Transaction not found"));
+        }
 
         List<Transaction> transactions = new ArrayList<>();
         BigDecimal installmentAmount = BigDecimal.ZERO;
@@ -63,27 +68,34 @@ public class TransactionServiceImpl implements TransactionService {
             }
         }
         else {
-            Transaction tr = getTransactionById(trd.getPurchaseTransactionId());
-            transactions.add(createPaymentTransaction(customerId, trd.getPurchaseTransactionId(), trd.getAmount()));
+            transactions.add(createPaymentTransaction(customerId, trd.getPurchaseTransactionId(), tr.getAmount()));
         }
 
-        validateCreditLimit(customerId, trd.getAmount());
+        if (trd.getTransactionType() == Transaction.TransactionType.PURCHASE)
+        {
+            validateCreditLimit(customerId, trd.getAmount());
+        }
         transactionRepository.saveAll(transactions);
 
-        ConsolidatedData consolidatedData = consolidatedDataRepository.findByCustomerId(customer.getId());
+        if (trd.getTransactionType() == Transaction.TransactionType.PURCHASE)
+        {
+            ConsolidatedData consolidatedData = consolidatedDataRepository.findByCustomerId(customer.getId());
 
-        if (consolidatedData == null) {
-            consolidatedData = new ConsolidatedData();
-            consolidatedData.setCustomer(customer);
-            consolidatedData.setTotalAmount(totalAmount);
-            consolidatedData.setTotalInterest(totalInterest);
-            consolidatedData.setCreditUsed(trd.getAmount());
-        } else {
-            consolidatedData.setTotalAmount(consolidatedData.getTotalAmount().add(totalAmount));
-            consolidatedData.setTotalInterest(consolidatedData.getTotalInterest().add(totalInterest));
-            consolidatedData.setCreditUsed(consolidatedData.getCreditUsed().add(trd.getAmount()));
+            if (consolidatedData == null) {
+                consolidatedData = new ConsolidatedData();
+                consolidatedData.setCustomer(customer);
+                consolidatedData.setTotalAmount(totalAmount);
+                consolidatedData.setTotalInterest(totalInterest);
+                consolidatedData.setCreditUsed(trd.getAmount());
+                consolidatedData.setTotalPaymentPending(totalAmount);
+            } else {
+                consolidatedData.setTotalAmount(consolidatedData.getTotalAmount().add(totalAmount));
+                consolidatedData.setTotalInterest(consolidatedData.getTotalInterest().add(totalInterest));
+                consolidatedData.setCreditUsed(consolidatedData.getCreditUsed().add(trd.getAmount()));
+                consolidatedData.setTotalPaymentPending(consolidatedData.getTotalPaymentPending().add(totalAmount));
+            }
+            consolidatedDataRepository.save(consolidatedData);
         }
-        consolidatedDataRepository.save(consolidatedData);
 
         return transactions;
     }
@@ -91,10 +103,13 @@ public class TransactionServiceImpl implements TransactionService {
     private Transaction createSinglePaymentTransaction(Customer customer, BigDecimal amount, String description, BigDecimal interestRate, TransactionRequestDto.InterestType interestType, TransactionRequestDto.TasaType tasaType, TransactionRequestDto.CapitalizacionType capitalizacionType, LocalDate transactionDate, LocalDate paymentDate, LocalDate monthlyPaymentDate) {
         BigDecimal totalAmount = calculateSinglePayment(amount, interestRate, interestType, tasaType, capitalizacionType, monthlyPaymentDate);
         BigDecimal interestAmount = calculateSingleInterestAmount(amount, interestRate, interestType, tasaType, capitalizacionType, monthlyPaymentDate);
+        Transaction.InterestType interestTypeTr = interestType == TransactionRequestDto.InterestType.NOMINAL ? Transaction.InterestType.NOMINAL : Transaction.InterestType.EFECTIVA;
         return Transaction.builder()
                 .customer(customer)
+                .penaltyInterestRate(customer.getPenaltyInterestRate())
                 .amount(totalAmount)
                 .interestAmount(interestAmount)
+                .interestType(interestTypeTr)
                 .description(description)
                 .transactionDate(transactionDate)
                 .dueDate(paymentDate)
@@ -115,25 +130,21 @@ public class TransactionServiceImpl implements TransactionService {
         LocalDate paymentDate = customerService.getMaxPaymentDateForCurrentMonth(customerId);
 
         BigDecimal totalAmount = purchaseTransaction.getAmount();
-        BigDecimal interestAmount = purchaseTransaction.getInterestAmount();
         BigDecimal remainingAmount = totalAmount.subtract(paymentAmount);
-        BigDecimal remainingInterest = interestAmount.subtract(remainingAmount.multiply(purchaseTransaction.getAppliedInterest()));
 
         Transaction paymentTransaction = Transaction.builder()
                 .customer(customer)
                 .amount(paymentAmount)
-                .interestAmount(paymentAmount.multiply(purchaseTransaction.getAppliedInterest()))
+                //.interestAmount(paymentAmount.multiply(purchaseTransaction.getAppliedInterest()))
                 .description("Payment for transaction " + purchaseTransactionId)
                 .transactionDate(transactionDate)
                 .dueDate(paymentDate)
                 .transactionType(Transaction.TransactionType.PAYMENT)
                 .status(Transaction.TransactionStatus.PAID)
                 .creditType(Transaction.CreditType.SINGLE_PAYMENT)
-                .appliedInterest(purchaseTransaction.getAppliedInterest())
+                //.appliedInterest(purchaseTransaction.getAppliedInterest())
                 .build();
 
-        purchaseTransaction.setAmount(remainingAmount);
-        purchaseTransaction.setInterestAmount(remainingInterest);
         if (remainingAmount.compareTo(BigDecimal.ZERO) == 0) {
             purchaseTransaction.setStatus(Transaction.TransactionStatus.PAID);
         }
@@ -141,9 +152,11 @@ public class TransactionServiceImpl implements TransactionService {
         transactionRepository.save(paymentTransaction);
 
         ConsolidatedData consolidatedData = consolidatedDataRepository.findByCustomerId(customer.getId());
-        consolidatedData.setTotalAmount(consolidatedData.getTotalAmount().subtract(paymentAmount));
-        consolidatedData.setTotalInterest(consolidatedData.getTotalInterest().subtract(paymentAmount.multiply(purchaseTransaction.getAppliedInterest())));
+        consolidatedData.setTotalPaymentPending(consolidatedData.getTotalAmount().subtract(paymentAmount));
         consolidatedData.setCreditUsed(consolidatedData.getCreditUsed().subtract(paymentAmount));
+        consolidatedData.setTotalPaymentAmount(consolidatedData.getTotalPaymentAmount().add(paymentAmount));
+        consolidatedData.setTotalPenaltyPayment(consolidatedData.getTotalPenaltyPayment().add(purchaseTransaction.getPenaltyInterestAmount()));
+        consolidatedData.setTotalPenaltyPending(consolidatedData.getTotalPenaltyPending().subtract(purchaseTransaction.getPenaltyInterestAmount()));
         consolidatedDataRepository.save(consolidatedData);
 
         return paymentTransaction;
@@ -154,14 +167,17 @@ public class TransactionServiceImpl implements TransactionService {
         //BigDecimal installmentAmount = amount.divide(BigDecimal.valueOf(installments), BigDecimal.ROUND_HALF_UP);
         BigDecimal installmentAmount = calculateMultiPayment(amount, interestRate, installments, tasaType);
         BigDecimal interestAmount = installmentAmount.subtract(amount.divide(BigDecimal.valueOf(installments), MathContext.DECIMAL128));
+        Transaction.InterestType interestTypeTr = interestType == TransactionRequestDto.InterestType.NOMINAL ? Transaction.InterestType.NOMINAL : Transaction.InterestType.EFECTIVA;
 
 
         for (int i = 0; i < installments; i++) {
             LocalDate paymentDate = customerService.getMaxPaymentDateForMonth(transactionDate.plusMonths(i + 1), customer.getId());
             transactions.add(Transaction.builder()
                     .customer(customer)
+                    .penaltyInterestRate(customer.getPenaltyInterestRate())
                     .amount(installmentAmount)
                     .interestAmount(interestAmount)
+                    .interestType(interestTypeTr)
                     .description(description)
                     .transactionDate(transactionDate)
                     .dueDate(paymentDate)
@@ -187,7 +203,8 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
-    public List<Transaction> findAll() {
+    public List<Transaction> findAll(Long customerId) {
+        verificatePenaltyCredit(customerId);
         return transactionRepository.findAll();
     }
 
@@ -211,6 +228,42 @@ public class TransactionServiceImpl implements TransactionService {
         response.setTotalInterest(consolidatedData.getTotalInterest());
         response.setCreditUsed(consolidatedData.getCreditUsed());
         return response;
+    }
+
+    public void verificatePenaltyCredit(Long customerId) {
+        List<Transaction> transactions = transactionRepository.findAll();
+        List<Transaction> transactionsByCustomer = transactionRepository.findByCustomerId(customerId);
+        for (Transaction transaction : transactions) {
+            if (transaction.getStatus() == Transaction.TransactionStatus.PENDING) {
+                LocalDate currentDate = LocalDate.now();
+                if (currentDate.isAfter(transaction.getDueDate())) {
+                    int pastDays = (int) transaction.getDueDate().until(currentDate).getDays();
+                    if (transaction.getInterestType() == Transaction.InterestType.EFECTIVA)
+                    {
+                        BigDecimal penaltyInterest = transaction.getPenaltyInterestRate().divide(BigDecimal.valueOf(100), MathContext.DECIMAL128);
+                        BigDecimal base = BigDecimal.ONE.add(penaltyInterest);
+                        BigDecimal exp = BigDecimal.valueOf(pastDays).divide(BigDecimal.valueOf(360), MathContext.DECIMAL128);
+                        BigDecimal value = pow(base, exp).subtract(BigDecimal.ONE, MathContext.DECIMAL128);
+                        BigDecimal penaltyAmount = transaction.getAmount().multiply(value, MathContext.DECIMAL128);
+                        transaction.setPenaltyInterestAmount(penaltyAmount);
+                    }
+                    else {
+                        BigDecimal penaltyInterest = transaction.getPenaltyInterestRate().divide(BigDecimal.valueOf(100), MathContext.DECIMAL128);
+                        BigDecimal base = penaltyInterest.divide(BigDecimal.valueOf(360), MathContext.DECIMAL128).add(BigDecimal.ONE);
+                        BigDecimal value = pow(base, BigDecimal.valueOf(pastDays)).subtract(BigDecimal.ONE, MathContext.DECIMAL128);
+                        BigDecimal penaltyAmount = transaction.getAmount().multiply(value, MathContext.DECIMAL128);
+                        transaction.setPenaltyInterestAmount(penaltyAmount);
+                    }
+                }
+            }
+        }
+        ConsolidatedData consolidatedData = consolidatedDataRepository.findByCustomerId(customerId);
+        BigDecimal totalPenaltyAmount = BigDecimal.ZERO;
+        for (Transaction transaction : transactionsByCustomer) {
+            totalPenaltyAmount = totalPenaltyAmount.add(transaction.getPenaltyInterestAmount());
+        }
+        consolidatedData.setTotalPenaltyAmount(totalPenaltyAmount);
+        consolidatedData.setTotalPenaltyPending(consolidatedData.getTotalPenaltyPayment().add(totalPenaltyAmount));
     }
 
     public BigDecimal calculateSinglePayment(BigDecimal amount, BigDecimal interestRate, TransactionRequestDto.InterestType interestType, TransactionRequestDto.TasaType tasaType, TransactionRequestDto.CapitalizacionType capitalizacionType, LocalDate monthlyPaymentDate) {

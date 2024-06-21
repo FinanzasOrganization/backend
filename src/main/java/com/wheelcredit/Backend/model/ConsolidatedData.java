@@ -20,14 +20,29 @@ public class ConsolidatedData {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "total_amount", precision = 17, scale = 7)
-    private BigDecimal totalAmount;
+    @Column(name = "total_purchase_amount", precision = 17, scale = 7)
+    private BigDecimal totalAmount = BigDecimal.ZERO;
 
     @Column(name = "total_interest", precision = 17, scale = 7)
-    private BigDecimal totalInterest;
+    private BigDecimal totalInterest = BigDecimal.ZERO;
+
+    @Column(name = "total_payment_amount", precision = 17, scale = 7)
+    private BigDecimal totalPaymentAmount = BigDecimal.ZERO;
+
+    @Column(name = "total_payment_pending", precision = 17, scale = 7)
+    private BigDecimal totalPaymentPending = BigDecimal.ZERO;
+
+    @Column(name = "total_penalty_amount", precision = 17, scale = 7)
+    private BigDecimal totalPenaltyAmount = BigDecimal.ZERO;
+
+    @Column(name = "total_penalty_payment", precision = 17, scale = 7)
+    private BigDecimal totalPenaltyPayment = BigDecimal.ZERO;
+
+    @Column(name = "total_penalty_pending", precision = 17, scale = 7)
+    private BigDecimal totalPenaltyPending = BigDecimal.ZERO;
 
     @Column(name = "credit_used", precision = 17, scale = 7)
-    private BigDecimal creditUsed;
+    private BigDecimal creditUsed = BigDecimal.ZERO;
 
     @JsonIgnore
     @OneToOne(fetch = FetchType.LAZY)

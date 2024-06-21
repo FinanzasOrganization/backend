@@ -30,10 +30,13 @@ public class Transaction {
     private LocalDate dueDate;
 
     @Column(name = "amount", precision = 17, scale = 7)
-    private BigDecimal amount;
+    private BigDecimal amount = BigDecimal.ZERO;
 
     @Column(name = "interest_amount", precision = 17, scale = 7)
-    private BigDecimal interestAmount;
+    private BigDecimal interestAmount = BigDecimal.ZERO;
+
+    @Column(name = "penalty_interest_amount", precision = 17, scale = 7)
+    private BigDecimal penaltyInterestAmount = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "transaction_type")
@@ -43,7 +46,7 @@ public class Transaction {
     private String description;
 
     @Column(name = "applied_interest")
-    private BigDecimal appliedInterest;
+    private BigDecimal appliedInterest = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
@@ -56,9 +59,16 @@ public class Transaction {
     @Column(name = "credit_type")
     private CreditType creditType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "interest_type")
+    private InterestType interestType;
+
+    @Column(name = "penalty_interest_rate")
+    private BigDecimal penaltyInterestRate = BigDecimal.ZERO;
+
     // For MULTI_PAYMENT: Number of installments
     @Column(name = "installments")
-    private Integer installments;
+    private Integer installments = 0;
 
     public String getCustomerName() {
         return customer.getName();
@@ -75,7 +85,14 @@ public class Transaction {
 
     public enum TransactionStatus {
         PENDING,
-        PAID
+        PAID,
+        COMPLETED,
+        DELAYED,
+    }
+
+    public enum InterestType {
+        NOMINAL,
+        EFECTIVA
     }
 
     public enum CreditType {
