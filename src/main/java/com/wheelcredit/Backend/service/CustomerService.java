@@ -14,4 +14,5 @@ public interface CustomerService {
     boolean existsByEmail(String email); // Método para verificar si un cliente existe por su correo electrónico
     LocalDate getMaxPaymentDateForCurrentMonth(Long customerId); // Método para obtener la fecha máxima de pago para el mes actual
     LocalDate getMaxPaymentDateForMonth(LocalDate date, Long customerId);
+    List<Customer> findByClientId(Long clientId); // Método para encontrar todos los clientes por el ID del cliente
 }

@@ -211,6 +211,10 @@ public class TransactionServiceImpl implements TransactionService {
         return transactionRepository.findAll();
     }
 
+    public List<Transaction> findByClientId(Long clientId) {
+        return transactionRepository.findByClientId(clientId);
+    }
+
     @Override
     public Transaction updateStatus(Long transactionId, Transaction.TransactionStatus newStatus) {
         Transaction transaction = transactionRepository.findById(transactionId)

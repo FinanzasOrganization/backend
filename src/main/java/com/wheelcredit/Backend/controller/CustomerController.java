@@ -58,4 +58,11 @@ public class CustomerController {
         List<Customer> customers = customerService.findAll();
         return new ResponseEntity<>(customers, HttpStatus.OK);
     }
+
+    @Transactional
+    @GetMapping("/client/{clientId}")
+    public ResponseEntity<List<Customer>> getCustomersByClientId(@PathVariable(name = "clientId") Long clientId) {
+        List<Customer> customers = customerService.findByClientId(clientId);
+        return new ResponseEntity<>(customers, HttpStatus.OK);
+    }
 }

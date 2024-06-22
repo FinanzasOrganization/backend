@@ -44,8 +44,15 @@ public class TransactionController {
 
     @Transactional
     @GetMapping("/{customerId}")
-    public ResponseEntity<List<Transaction>> getAllTransactions(@PathVariable(name = "customerId") Long customerId) {
+    public ResponseEntity<List<Transaction>> getAllTransactions(@PathVariable(name = "customerId") Long customerId){
         List<Transaction> transactions = transactionService.findAll(customerId);
+        return ResponseEntity.ok(transactions);
+    }
+
+    @Transactional
+    @GetMapping("/client/{clientId}")
+    public ResponseEntity<List<Transaction>> getTransactionsByClientId(@PathVariable(name = "clientId") Long clientId) {
+        List<Transaction> transactions = transactionService.findByClientId(clientId);
         return ResponseEntity.ok(transactions);
     }
 

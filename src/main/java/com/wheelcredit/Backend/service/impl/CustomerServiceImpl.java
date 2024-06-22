@@ -55,6 +55,11 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    public List<Customer> findByClientId(Long clientId) {
+        return customerRepository.findByClientId(clientId);
+    }
+
+    @Override
     public boolean existsByEmail(String email) {
         return customerRepository.existsByEmail(email);
     }

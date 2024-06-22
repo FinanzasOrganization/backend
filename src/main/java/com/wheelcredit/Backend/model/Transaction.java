@@ -78,6 +78,10 @@ public class Transaction {
         return customer.getCreditLimit();
     }
 
+    public Long getClientId() {
+        return customer.getClient().getId();
+    }
+
     public enum TransactionType {
         PURCHASE,
         PAYMENT
