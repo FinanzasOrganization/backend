@@ -9,10 +9,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.wheel-credit</groupId>
-	<artifactId>Backend</artifactId>
+	<artifactId>gofinance</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>Backend</name>
-	<description>Backend for Wheel Credit</description>
+	<name>gofinance</name>
+	<description>Backend for GoFinance</description>
 	<properties>
 		<java.version>17</java.version>
 	</properties>
